@@ -1,0 +1,64 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out site and Git LFS assets
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Verify assets and prepare published files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          for asset in Path('assets').rglob('*'):
+              if asset.is_file():
+                  with asset.open('rb') as source:
+                      if source.read(100).startswith(b'version https://git-lfs.github.com/spec/v1'):
+                          raise SystemExit(f'Git LFS asset was not downloaded: {asset}')
+
+          output = Path('_site')
+          output.mkdir()
+          for name in ('index.html', 'styles.css', 'script.js', 'robots.txt'):
+              shutil.copy2(name, output / name)
+          if Path('CNAME').is_file():
+              shutil.copy2('CNAME', output / 'CNAME')
+          shutil.copytree('assets', output / 'assets')
+          PY
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy site
+        id: deployment
+        uses: actions/deploy-pages@v4
