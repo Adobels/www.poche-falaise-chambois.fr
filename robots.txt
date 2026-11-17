@@ -1,0 +1,3 @@
+# Block crawling by all compliant search engine and AI bots.
+User-agent: *
+Disallow: /
